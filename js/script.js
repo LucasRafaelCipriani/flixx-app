@@ -1,12 +1,34 @@
 const global = {
   currentPage: window.location.pathname,
+  search: {
+    term: "",
+    type: "",
+    page: 1,
+    totalPages: 1,
+    totalResults: 0,
+  },
+  api: {
+    apiKey: "cdcf2eb8667da4906eecdcb1b34638ee",
+    apiUrl: "https://api.themoviedb.org/3/",
+  },
+  dateOptions: {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  },
 };
 
 async function displayPopularMovies() {
   const { results } = await fetchAPIData("movie/popular");
 
   results.forEach((movie) => {
-    const releaseDate = new Date(movie.release_date);
+    const releaseDate = movie.release_date
+      ? new Date(movie.release_date).toLocaleDateString(
+          "en-US",
+          global.dateOptions
+        )
+      : "N/A";
     const movieImage = movie.poster_path
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : "../images/no-image.jpg";
@@ -23,15 +45,7 @@ async function displayPopularMovies() {
         <div class="card-body">
           <h5 class="card-title">${movie.title}</h5>
           <p class="card-text">
-            <small class="text-muted">Release: ${releaseDate.toLocaleDateString(
-              "en-US",
-              {
-                timeZone: "UTC",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              }
-            )}</small>
+            <small class="text-muted">Release: ${releaseDate}</small>
           </p>
         </div>
     `;
@@ -44,7 +58,12 @@ async function displayPopularShows() {
   const { results } = await fetchAPIData("tv/popular");
 
   results.forEach((show) => {
-    const firstAirDate = new Date(show.first_air_date);
+    const firstAirDate = show.first_air_date
+      ? new Date(show.first_air_date).toLocaleDateString(
+          "en-US",
+          global.dateOptions
+        )
+      : "N/A";
     const showImage = show.poster_path
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
       : "../images/no-image.jpg";
@@ -61,15 +80,7 @@ async function displayPopularShows() {
           <div class="card-body">
             <h5 class="card-title">${show.name}</h5>
             <p class="card-text">
-              <small class="text-muted">Release: ${firstAirDate.toLocaleDateString(
-                "en-US",
-                {
-                  timeZone: "UTC",
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                }
-              )}</small>
+              <small class="text-muted">Release: ${firstAirDate}</small>
             </p>
           </div>
       `;
@@ -82,7 +93,12 @@ async function displayMovieDetails() {
   const movieId = window.location.search.split("=")[1];
 
   const movie = await fetchAPIData(`movie/${movieId}`);
-  const releaseDate = new Date(movie.release_date);
+  const releaseDate = movie.release_date
+    ? new Date(movie.release_date).toLocaleDateString(
+        "en-US",
+        global.dateOptions
+      )
+    : "N/A";
   const movieImage = movie.poster_path
     ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
     : "../images/no-image.jpg";
@@ -103,10 +119,7 @@ async function displayMovieDetails() {
           <i class="fas fa-star text-primary"></i>
           ${movie.vote_average.toFixed(1)} / 10
         </p>
-        <p class="text-muted">Release Date: ${releaseDate.toLocaleDateString(
-          "en-US",
-          { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }
-        )}</p>
+        <p class="text-muted">Release Date: ${releaseDate}</p>
         <p>
           ${movie.overview}
         </p>
@@ -149,7 +162,12 @@ async function displayShowDetails() {
   const showId = window.location.search.split("=")[1];
 
   const show = await fetchAPIData(`tv/${showId}`);
-  const firstAirDate = new Date(show.first_air_date);
+  const firstAirDate = show.first_air_date
+    ? new Date(show.first_air_date).toLocaleDateString(
+        "en-US",
+        global.dateOptions
+      )
+    : "N/A";
   const showImage = show.poster_path
     ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
     : "../images/no-image.jpg";
@@ -170,10 +188,7 @@ async function displayShowDetails() {
           <i class="fas fa-star text-primary"></i>
           ${show.vote_average.toFixed(1)} / 10
         </p>
-        <p class="text-muted">Release Date: ${firstAirDate.toLocaleDateString(
-          "en-US",
-          { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }
-        )}</p>
+        <p class="text-muted">Release Date: ${firstAirDate}</p>
         <p>
           ${show.overview}
         </p>
@@ -211,12 +226,79 @@ async function displayShowDetails() {
   displayBackgroundImage("show", show.backdrop_path);
 }
 
-function displayBackgroundImage(type, backgroundPath) {
-  const overlayDiv = document.createElement("div");
-  overlayDiv.style.backgroundImage = `url(https://image.tmdb.org/t/p/original/${backgroundPath})`;
-  overlayDiv.classList.add("overlay");
+async function displaySearchResults() {
+  document.getElementById("search-results").innerHTML = "";
 
-  document.querySelector(`#${type}-details`).appendChild(overlayDiv);
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+
+  global.search.type = urlParams.get("type") ?? "";
+  global.search.term = urlParams.get("search-term") ?? "";
+
+  if (global.search.term !== "") {
+    const { results, total_pages, page, total_results } = await searchAPIData();
+
+    global.search.page = page;
+    global.search.totalPages = total_pages;
+    global.search.totalResults = total_results;
+
+    if (results.length === 0) {
+      showAlert("No results found", "alert-error");
+      return;
+    }
+
+    results.forEach((result) => {
+      const releaseDate =
+        global.search.type === "movie"
+          ? result.release_date
+            ? new Date(result.release_date).toLocaleDateString(
+                "en-US",
+                global.dateOptions
+              )
+            : "N/A"
+          : result.first_air_date
+          ? new Date(result.first_air_date).toLocaleDateString(
+              "en-US",
+              global.dateOptions
+            )
+          : "N/A";
+      const resultImage = result.poster_path
+        ? `https://image.tmdb.org/t/p/w500${result.poster_path}`
+        : "../images/no-image.jpg";
+      const div = document.createElement("div");
+      div.classList.add("card");
+      div.innerHTML = `
+          <a href="${global.search.type}-details.html?id=${result.id}">
+            <img
+              src="${resultImage}"
+              class="card-img-top"
+              alt="${
+                global.search.type === "movie" ? result.title : result.name
+              }"
+            />
+          </a>
+          <div class="card-body">
+            <h5 class="card-title">${
+              global.search.type === "movie" ? result.title : result.name
+            }</h5>
+            <p class="card-text">
+              <small class="text-muted">Release: ${releaseDate}</small>
+            </p>
+          </div>
+      `;
+
+      document.getElementById("search-results").appendChild(div);
+    });
+
+    document.getElementById("search-term").value = "";
+    document.getElementById("search-results-heading").innerHTML = `
+      <h2>${results.length} of ${global.search.totalResults} Results for ${global.search.term}</h2>
+    `;
+
+    displayPagination();
+  } else {
+    showAlert("Please enter a search term", "alert-error");
+  }
 }
 
 async function displaySlider() {
@@ -246,6 +328,70 @@ async function displaySlider() {
   });
 }
 
+async function fetchAPIData(endpoint) {
+  showSpinner();
+
+  const response = await fetch(
+    `${global.api.apiUrl}${endpoint}?api_key=${global.api.apiKey}&language=en-US`
+  );
+  const data = await response.json();
+
+  hideSpinner();
+  return data;
+}
+
+async function searchAPIData() {
+  showSpinner();
+
+  const response = await fetch(
+    `${global.api.apiUrl}search/${global.search.type}?api_key=${global.api.apiKey}&language=en-US&query=${global.search.term}&page=${global.search.page}`
+  );
+  const data = await response.json();
+
+  hideSpinner();
+  return data;
+}
+
+function displayPagination() {
+  document.getElementById("pagination").innerHTML = "";
+
+  const div = document.createElement("div");
+  div.classList.add("pagination");
+  div.innerHTML = `
+    <button class="btn btn-primary" id="prev">Prev</button>
+    <button class="btn btn-primary" id="next">Next</button>
+    <div class="page-counter">Page ${global.search.page} of ${global.search.totalPages}</div>
+  `;
+
+  document.getElementById("pagination").appendChild(div);
+
+  if (global.search.page === 1) {
+    document.getElementById("prev").disabled = true;
+  }
+
+  if (global.search.page === global.search.totalPages) {
+    document.getElementById("next").disabled = true;
+  }
+
+  document.getElementById("next").addEventListener("click", async () => {
+    global.search.page++;
+    await displaySearchResults();
+  });
+
+  document.getElementById("prev").addEventListener("click", async () => {
+    global.search.page--;
+    await displaySearchResults();
+  });
+}
+
+function displayBackgroundImage(type, backgroundPath) {
+  const overlayDiv = document.createElement("div");
+  overlayDiv.style.backgroundImage = `url(https://image.tmdb.org/t/p/original/${backgroundPath})`;
+  overlayDiv.classList.add("overlay");
+
+  document.querySelector(`#${type}-details`).appendChild(overlayDiv);
+}
+
 function initSwiper() {
   new Swiper(".swiper", {
     slidesPerView: 1,
@@ -270,22 +416,6 @@ function initSwiper() {
   });
 }
 
-// Fetch data from TMDB API
-async function fetchAPIData(endpoint) {
-  const API_KEY = "cdcf2eb8667da4906eecdcb1b34638ee";
-  const API_URL = "https://api.themoviedb.org/3/";
-
-  showSpinner();
-
-  const response = await fetch(
-    `${API_URL}${endpoint}?api_key=${API_KEY}&language=en-US`
-  );
-  const data = await response.json();
-
-  hideSpinner();
-  return data;
-}
-
 function showSpinner() {
   document.querySelector(".spinner").classList.add("show");
 }
@@ -294,7 +424,6 @@ function hideSpinner() {
   document.querySelector(".spinner").classList.remove("show");
 }
 
-// Highlight active link
 function highlightActiveLink() {
   const links = document.querySelectorAll(".nav-link");
   links.forEach((link) => {
@@ -304,11 +433,26 @@ function highlightActiveLink() {
   });
 }
 
+function showAlert(message, className) {
+  const alertEl = document.createElement("div");
+  alertEl.classList.add("alert");
+
+  if (className) {
+    alertEl.classList.add(className);
+  }
+  alertEl.appendChild(document.createTextNode(message));
+
+  document.getElementById("alert").appendChild(alertEl);
+
+  setTimeout(() => {
+    document.getElementById("alert").removeChild(alertEl);
+  }, 3000);
+}
+
 function addCommasToNumber(number) {
   return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-// Init App
 function init() {
   switch (global.currentPage) {
     case "/":
@@ -320,6 +464,7 @@ function init() {
       displayPopularShows();
       break;
     case "/search.html":
+      displaySearchResults();
       break;
     case "/tv-details.html":
       displayShowDetails();
